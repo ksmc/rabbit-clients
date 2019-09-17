@@ -23,7 +23,6 @@ def _create_global_connection() -> NoReturn:
 
     _CONNECTION = pika.BlockingConnection(pika.ConnectionParameters(_HOST))
     _CHANNEL = _CONNECTION.channel()
-    _CHANNEL.declare_queue()
 
 
 def send_message(queue: str, exchange: str) -> Any:
@@ -40,6 +39,8 @@ def send_message(queue: str, exchange: str) -> Any:
 
         result = func(*args, **kwargs)
 
+        _CHANNEL.declare_queue(queue=queue)
+
         _CHANNEL.basic_publish(
             exchange=exchange,
             routing_key=queue,
@@ -49,7 +50,7 @@ def send_message(queue: str, exchange: str) -> Any:
     return prepare_channel
 
 
-def receive_message(function: Any) -> Any:
+def receive_message(queue: str, exchange: str) -> Any:
     """
     Receive messages from RabbitMQ Server
 
@@ -58,5 +59,15 @@ def receive_message(function: Any) -> Any:
     :rtype: Function
 
     """
+    def prepare_channel(func) -> Any:
 
+        _CHANNEL.queue_declare(queue=queue)
 
+        def message_handler(ch, method, properties, body):
+            return func(body)
+
+        _CHANNEL.basic_consume(queue=queue, on_message_callback=message_handler, auto_ack=True)
+
+        _CHANNEL.start_consuming()
+
+    return prepare_channel
