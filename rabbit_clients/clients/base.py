@@ -2,7 +2,7 @@
 Base classes for Rabbit
 
 """
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Dict
 import os
 import json
 
@@ -82,7 +82,17 @@ def receive_message(queue: str, production_ready: bool=True) -> Any:
         _CHANNEL.queue_declare(queue=queue)
 
         def message_handler(ch, method, properties, body):
-            return func(json.loads(body))
+            json_dict = json.loads(body)
+
+            @send_message(queue='logging', exchange='')
+            def send_log():
+                return {
+                    'channel': ch,
+                    'method': method,
+                    'properties': properties,
+                    'body': json_dict
+                }
+            return func(json_dict)
 
         if production_ready:  # pragma: no cover
 
@@ -97,4 +107,13 @@ def receive_message(queue: str, production_ready: bool=True) -> Any:
             if body:
                 message_handler(None, None, None, body)
 
+                @send_message(queue='logging', exchange='')
+                def send_log():
+                    return {
+                        'method': method,
+                        'properties': properties,
+                        'body': body
+                    }
+
     return prepare_channel
+
