@@ -21,12 +21,10 @@ def test_that_a_message_is_sent_and_received() -> NoReturn:
     def issue_message() -> Dict[str, str]:
         return {'lastName': 'Suave', 'firstName': 'Rico', 'call': 'oi-yaaay, oi-yay'}
 
-    @receive_message(queue='test', exchange='')
+    time.sleep(5)
+
+    @receive_message(queue='test', production_ready=False)
     def get_message(message_content: Dict[str, Any]):
         assert message_content['lastName'] == 'Suave'
         assert message_content['firstName'] == 'Rico'
         assert message_content['call'] == 'oi-yaaay, oi-yay'
-
-    issue_message()
-    time.sleep(2)
-    get_message()

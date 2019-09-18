@@ -18,11 +18,22 @@ def _create_global_connection() -> NoReturn:
     Will run immediately on library import.  Requires that an environment variable
     for RABBIT_URL has been set.
 
+    :return: None
     """
     global _CONNECTION, _CHANNEL
 
     _CONNECTION = pika.BlockingConnection(pika.ConnectionParameters(_HOST))
     _CHANNEL = _CONNECTION.channel()
+
+
+def _check_connection() -> NoReturn:  # pragma: no-cover
+    """
+    Checks to make sure a connection didn't close; reopens everything if true
+
+    :return: None
+    """
+    if not _CONNECTION.is_open:
+        _create_global_connection()
 
 
 def send_message(queue: str, exchange: str) -> Any:
@@ -39,7 +50,10 @@ def send_message(queue: str, exchange: str) -> Any:
 
         result = func(*args, **kwargs)
 
-        _CHANNEL.declare_queue(queue=queue)
+        if not _CONNECTION.is_open:  # pragma: no cover
+            _check_connection()
+
+        _CHANNEL.queue_declare(queue=queue)
 
         _CHANNEL.basic_publish(
             exchange=exchange,
@@ -50,24 +64,37 @@ def send_message(queue: str, exchange: str) -> Any:
     return prepare_channel
 
 
-def receive_message(queue: str, exchange: str) -> Any:
+def receive_message(queue: str, production_ready: bool=True) -> Any:
     """
     Receive messages from RabbitMQ Server
 
     :param function: User function to be decorated
+    :param:
     :return: Wrapped User Function
     :rtype: Function
 
     """
     def prepare_channel(func) -> Any:
 
+        if not _CONNECTION.is_open:  # pragma: no cover
+            _create_global_connection()
+
         _CHANNEL.queue_declare(queue=queue)
 
         def message_handler(ch, method, properties, body):
-            return func(body)
+            return func(json.loads(body))
 
-        _CHANNEL.basic_consume(queue=queue, on_message_callback=message_handler, auto_ack=True)
+        if production_ready:  # pragma: no cover
 
-        _CHANNEL.start_consuming()
+            _CHANNEL.basic_consume(queue=queue, on_message_callback=message_handler, auto_ack=True)
+
+            try:
+                _CHANNEL.start_consuming()
+            except KeyboardInterrupt:
+                _CHANNEL.stop_consuming()
+        else:
+            method, properties, body = _CHANNEL.basic_get(queue, auto_ack=True)
+            if body:
+                message_handler(None, None, None, body)
 
     return prepare_channel
