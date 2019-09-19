@@ -9,7 +9,7 @@ from typing import Dict, NoReturn, Any
 import time
 import os
 
-from rabbit_clients import send_message, receive_message
+from rabbit_clients import send_message, receive_message, message_pipeline
 
 
 _DOCKER_UP = os.environ['DOCKER_STATUS']
@@ -29,7 +29,7 @@ def test_that_a_message_is_sent_and_received() -> NoReturn:
     # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
-    @receive_message(queue='test', production_ready=False)
+    @receive_message(consume_queue='test', production_ready=False)
     def get_message(message_content: Dict[str, Any]):
         assert message_content['lastName'] == 'Suave'
         assert message_content['firstName'] == 'Rico'
@@ -50,8 +50,36 @@ def test_that_received_messages_are_published_to_logging_queue() -> NoReturn:
     # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
-    @receive_message(queue='logging', production_ready=False)
+    @receive_message(consume_queue='logging', production_ready=False)
     def check_log(message_content: Dict[str, Any]):
         assert 'method' in message_content.keys()
         assert 'body' in message_content.keys()
         assert isinstance(message_content['body'], dict)
+
+
+def test_that_convenience_function_behaves_as_performed() -> NoReturn:
+    """
+    Test that the convenience function works the same as the pure functions
+
+    :return: None
+
+    """
+    @send_message(queue='pipeline_test')
+    def send_sample_data() -> Dict[str, str]:
+        return {
+            'meat': 'bacon',
+            'cheese': 'mozzarella',
+            'crust': 'thin'
+        }
+
+    @message_pipeline(consume_queue='pipeline_test', publish_queue='pipeline_complete', production_ready=False)
+    def spit_and_chew(json_as_dict: Dict[str, str]) -> Dict[str, str]:
+        json_as_dict.update({'meat': 'sausage', 'crust': 'thick'})
+        return json_as_dict
+
+    @receive_message(consume_queue='pipeline_complete', production_ready=False)
+    def confirm_message(json_as_dict: Dict[str, str]) -> NoReturn:
+        assert json_as_dict['meat'] == 'sausage'
+        assert json_as_dict['cheese'] == 'mozzarella'
+        assert json_as_dict['crust'] == 'thin'
+
