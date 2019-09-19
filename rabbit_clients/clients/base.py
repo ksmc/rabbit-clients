@@ -32,6 +32,9 @@ def _check_connection() -> NoReturn:  # pragma: no-cover
 
     :return: None
     """
+    if not _CONNECTION:
+        _create_global_connection()
+
     if not _CONNECTION.is_open:
         _create_global_connection()
 
@@ -46,15 +49,30 @@ def send_message(queue: str, exchange: str) -> Any:
     :rtype: Function
 
     """
-    def prepare_channel(func, *args, **kwargs) -> Any:
+    def prepare_channel(func, *args, **kwargs) -> NoReturn:
+        """
+        Run the function as expected but the return from the function must
+        be a Python dictionary as it will be converted to JSON. Then ensure
+        RabbitMQ connection is open and that you have an open channel.  Then
+        use a basic_publish method to send the message to the target queue.
 
+        :param func:  The user function being decorated
+        :param args:  Any positional arguments passed to the function
+        :param kwargs: Any keyword arguments pass to the function
+        :return: None
+
+        """
+
+        # Run the function and get dictionary as result
         result = func(*args, **kwargs)
 
-        if not _CONNECTION.is_open:  # pragma: no cover
-            _check_connection()
+        # Ensure open connection and channel
+        _check_connection()
 
+        # Ensure queue exists
         _CHANNEL.queue_declare(queue=queue)
 
+        # Send message to queue
         _CHANNEL.basic_publish(
             exchange=exchange,
             routing_key=queue,
@@ -64,36 +82,61 @@ def send_message(queue: str, exchange: str) -> Any:
     return prepare_channel
 
 
-def receive_message(queue: str, production_ready: bool=True) -> Any:
+def receive_message(queue: str, production_ready: bool = True) -> Any:
     """
     Receive messages from RabbitMQ Server
 
-    :param function: User function to be decorated
-    :param:
+    :param queue: The queue to target
+    :param production_ready: Keyword argument that will make this
+    decorator only return one message from the queue rather than listen
+    if set to False; default True
     :return: Wrapped User Function
     :rtype: Function
 
     """
     def prepare_channel(func) -> Any:
+        """
+        Ensure RabbitMQ Connection is open and that you have an open
+        channel.  Then provide a callback returns the target function
+        but ensures that the incoming message body has been
+        converted from JSON to a Python dictionary.
 
-        if not _CONNECTION.is_open:  # pragma: no cover
-            _create_global_connection()
+        :param func: The user function being decorated
+        :return: An open listener utilizing the user function or
+        a one time message receive in the event of parent function
+        parameter of production ready being set to False
 
+        """
+
+        # Open RabbitMQ connection if it has closed or is not set
+        _check_connection()
+
+        # Ensure the queue we want to write to has been created
         _CHANNEL.queue_declare(queue=queue)
 
-        def message_handler(ch, method, properties, body):
-            json_dict = json.loads(body)
+        # Callback function for when a message is received
+        def message_handler(channel, method, properties, body):
 
+            # Utilize module decorator to send logging messages
             @send_message(queue='logging', exchange='')
-            def send_log():
+            def send_log() -> Dict[str, str]:
+                """
+                Send message details and body as JSON to logging
+                queue
+
+                :return: All message elements as Python dictionary
+                :rtype: dict
+
+                """
                 return {
-                    'channel': ch,
+                    'channel': channel,
                     'method': method,
                     'properties': properties,
-                    'body': json_dict
+                    'body': json.loads(body)
                 }
-            return func(json_dict)
+            return func(json.loads(body))
 
+        # Open up listener with callback
         if production_ready:  # pragma: no cover
 
             _CHANNEL.basic_consume(queue=queue, on_message_callback=message_handler, auto_ack=True)
@@ -102,18 +145,29 @@ def receive_message(queue: str, production_ready: bool=True) -> Any:
                 _CHANNEL.start_consuming()
             except KeyboardInterrupt:
                 _CHANNEL.stop_consuming()
+
+        # Consume one message and stop listening
         else:
             method, properties, body = _CHANNEL.basic_get(queue, auto_ack=True)
+            method = str(method)
+            properties = str(properties)
+
             if body:
                 message_handler(None, None, None, body)
-
                 @send_message(queue='logging', exchange='')
-                def send_log():
+                def send_log() -> Dict[str, str]:
+                    """
+                    Send message details and body as JSON to logging
+                    queue
+
+                    :return: All message elements as Python dictionaary
+                    :rtype: dict
+
+                    """
                     return {
                         'method': method,
                         'properties': properties,
-                        'body': body
+                        'body': json.loads(body)
                     }
 
     return prepare_channel
-

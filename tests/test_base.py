@@ -1,8 +1,13 @@
+"""
+Unit tests for expected purposes of base.py
+
+"""
+
+# pylint: disable=unused-variable
+
 from typing import Dict, NoReturn, Any
 import time
 import os
-
-import pytest
 
 from rabbit_clients import send_message, receive_message
 
@@ -21,6 +26,7 @@ def test_that_a_message_is_sent_and_received() -> NoReturn:
     def issue_message() -> Dict[str, str]:
         return {'lastName': 'Suave', 'firstName': 'Rico', 'call': 'oi-yaaay, oi-yay'}
 
+    # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
     @receive_message(queue='test', production_ready=False)
@@ -37,12 +43,11 @@ def test_that_received_messages_are_published_to_logging_queue() -> NoReturn:
     :return: None
 
     """
-
-
     @send_message(queue='test', exchange='')
     def issue_message() -> Dict[str, str]:
         return {'lastName': 'Suave', 'firstName': 'Rico', 'call': 'oi-yaaay, oi-yay'}
 
+    # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
     @receive_message(queue='logging', production_ready=False)

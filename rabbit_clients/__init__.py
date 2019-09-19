@@ -1,5 +1,6 @@
-from rabbit_clients.clients.base import _create_global_connection, _CONNECTION
-from rabbit_clients.clients.base import send_message, receive_message
+"""
+Init of rabbit_clients package
 
-if not _CONNECTION:
-    _create_global_connection()
+"""
+
+from rabbit_clients.clients.base import send_message, receive_message
