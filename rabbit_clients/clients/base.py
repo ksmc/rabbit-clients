@@ -39,7 +39,7 @@ def _check_connection() -> NoReturn:  # pragma: no-cover
         _create_global_connection()
 
 
-def send_message(queue: str, exchange: str = '') -> Any:
+def publish_message(queue: str, exchange: str = '') -> Any:
     """
     Send a message to the RabbitMQ Server
 
@@ -57,7 +57,6 @@ def send_message(queue: str, exchange: str = '') -> Any:
             RabbitMQ connection is open and that you have an open channel.  Then
             use a basic_publish method to send the message to the target queue.
 
-            :param func:  The user function being decorated
             :param args:  Any positional arguments passed to the function
             :param kwargs: Any keyword arguments pass to the function
             :return: None
@@ -84,7 +83,7 @@ def send_message(queue: str, exchange: str = '') -> Any:
     return inner_function
 
 
-def receive_message(consume_queue: str, publish_queues: Union[str, List[str]] = None, exchange: str = '',
+def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = None, exchange: str = '',
                     production_ready: bool = True) -> Any:
     """
     Receive messages from RabbitMQ Server
@@ -125,7 +124,7 @@ def receive_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
             def message_handler(channel, method, properties, body):
 
                 # Utilize module decorator to send logging messages
-                @send_message(queue='logging', exchange='')
+                @publish_message(queue='logging', exchange='')
                 def send_log() -> Dict[str, str]:
                     """
                     Send message details and body as JSON to logging
@@ -143,7 +142,7 @@ def receive_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
                     }
 
                 if publish_queues:
-                    send_message(queue=publish_queues, exchange=exchange)(func)(json.loads(body))
+                    publish_message(queue=publish_queues, exchange=exchange)(func)(json.loads(body))
 
             # Open up listener with callback
             if production_ready:  # pragma: no cover
@@ -163,7 +162,7 @@ def receive_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
 
                 if body:
                     message_handler(None, None, None, body)
-                    @send_message(queue='logging', exchange='')
+                    @publish_message(queue='logging', exchange='')
                     def send_log() -> Dict[str, str]:
                         """
                         Send message details and body as JSON to logging
@@ -195,7 +194,7 @@ def message_pipeline(consume_queue: str, publish_queue: str, exchange: str = '',
     """
     def inner_function(func):
         def wrapper(message_dict):
-            receive_message(consume_queue=consume_queue, publish_queues=publish_queue,
+            consume_message(consume_queue=consume_queue, publish_queues=publish_queue,
                             exchange=exchange, production_ready=production_ready)(func)(message_dict)
         return wrapper
     return inner_function
