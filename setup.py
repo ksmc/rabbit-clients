@@ -4,7 +4,7 @@ setup(
     name='rabbit-clients',
     version='0.9.0',
     packages=['tests', 'rabbit_clients', 'rabbit_clients.clients'],
-    url='',
+    url='https://github.com/awburgess/rabbit-clients',
     license='MIT License',
     author='Aaron Burgess',
     author_email='geoburge@gmail.com',
