@@ -12,7 +12,7 @@ setup(
     install_requires=[
         'pika'
     ],
-    extra_requires=[
+    extra_require=[
         'pytest',
         'pylint'
         'coverage',
