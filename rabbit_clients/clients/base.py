@@ -10,7 +10,7 @@ import pika
 
 _CONNECTION = None
 _CHANNEL = None
-_HOST = os.environ['RABBIT_URL']
+_HOST = os.environ.get('RABBIT_URL', 'localhost')
 
 
 def _create_global_connection() -> NoReturn:
