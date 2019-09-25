@@ -15,7 +15,10 @@ that need to exist as part of a queue oriented ecosystem.  They are opinionated 
 that you can only ever have one consumer per service.  This ties services
 to queues intentionally as to ensure the services purpose remains
 narrow and focused.  Services can publish as much as desired.  See the
-examples below for usage
+examples below for usage.
+
+*NOTE:* ```Rabbit-Clients``` looks for an environment variable called ```RABBIT_URL```.
+If this is not found then ```localhost``` will be used.
 
 ### Usage Example
 
