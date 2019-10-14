@@ -9,7 +9,7 @@ from typing import Dict, NoReturn, Any
 import time
 import os
 
-from rabbit_clients import publish_message, consume_message, message_pipeline
+from rabbit_clients import publish_message, consume_message
 
 
 _DOCKER_UP = os.environ['DOCKER_STATUS']
@@ -55,31 +55,4 @@ def test_that_received_messages_are_published_to_logging_queue() -> NoReturn:
         assert 'method' in message_content.keys()
         assert 'body' in message_content.keys()
         assert isinstance(message_content['body'], dict)
-
-
-def test_that_convenience_function_behaves_as_performed() -> NoReturn:
-    """
-    Test that the convenience function works the same as the pure functions
-
-    :return: None
-
-    """
-    @publish_message(queue='pipeline_test')
-    def send_sample_data() -> Dict[str, str]:
-        return {
-            'meat': 'bacon',
-            'cheese': 'mozzarella',
-            'crust': 'thin'
-        }
-
-    @message_pipeline(consume_queue='pipeline_test', publish_queue='pipeline_complete', production_ready=False)
-    def spit_and_chew(json_as_dict: Dict[str, str]) -> Dict[str, str]:
-        json_as_dict.update({'meat': 'sausage', 'crust': 'thick'})
-        return json_as_dict
-
-    @consume_message(consume_queue='pipeline_complete', production_ready=False)
-    def confirm_message(json_as_dict: Dict[str, str]) -> NoReturn:
-        assert json_as_dict['meat'] == 'sausage'
-        assert json_as_dict['cheese'] == 'mozzarella'
-        assert json_as_dict['crust'] == 'thin'
 

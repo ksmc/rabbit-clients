@@ -4,6 +4,14 @@ A set of client of objects to use in any service that needs to send or receive R
 
 ### Installation
 
+From pip
+
+```bash
+$ pip install rabbit-clients
+```
+
+From source
+
 ```python
 python setup.py install
 ```
@@ -15,40 +23,14 @@ that need to exist as part of a queue oriented ecosystem.  They are opinionated 
 that you can only ever have one consumer per service.  This ties services
 to queues intentionally as to ensure the services purpose remains
 narrow and focused.  Services can publish as much as desired.  See the
-examples below for usage
+examples below for usage.
+
+*NOTE:* ```Rabbit-Clients``` looks for an environment variable called ```RABBIT_URL```.
+If this is not found then ```localhost``` will be used.
 
 ### Usage Example
 
-The easiest example is when you stand up a service that needs to consume
-from one queue and then pass on to another.  You need to wrap a function that 
-consumes a dictionary and returns a dictionary.  The input parameter
-will be fed from the ```consume_queue``` and the output message will be
-converted to JSON and send to the "publish_queue".  At present, this function
-only supports one consume and one publish queue.
-
-```python
-from typing import TypeVar
-from rabbit_clients import message_pipeline
-
-RabbitMQMessage = TypeVar('RabbitMQMessage')
-
-@message_pipeline(consume_queue='oldfolks', publish_queue='younguns')
-def remove_forty_and_over(message_dict=None) -> RabbitMQMessage:
-    # Please note, the author is/was turning 40 around the time this was first written.
-    # So don't remove it in a future pull request.  I was here.
-    people = message_dict['people']
-    not_protected_class = [younger for younger in people if younger['age'] < 40]
-    message_dict['people'] = not_protected_class
-    return message_dict
-
-
-if __name__ == '__main__':
-    remove_forty_and_over()  # Listening for messages
-
-```
-
-Users can also utilize functions for consuming and publishing independently.  Users must
-remember, though, that only one consumer is allowed at a time.
+You may only have one consumer per module/service.  A user can publish as much as desired.
 
 ```python
 from typing import TypeVar

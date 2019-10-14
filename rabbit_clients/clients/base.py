@@ -10,7 +10,7 @@ import pika
 
 _CONNECTION = None
 _CHANNEL = None
-_HOST = os.environ['RABBIT_URL']
+_HOST = os.environ.get('RABBIT_URL', 'localhost')
 
 
 def _create_global_connection() -> NoReturn:
@@ -37,6 +37,25 @@ def _check_connection() -> NoReturn:  # pragma: no-cover
 
     if not _CONNECTION.is_open:
         _create_global_connection()
+
+
+def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str, Any]:
+    """
+    Helper function to send messages to logging queue
+
+    :param channel: Channel from incoming message
+    :param method: Method from incoming message
+    :param properties: Properties from incoming message
+    :param body: JSON from incoming message
+    :return: Dictionary representation of message
+
+    """
+    return {
+        'channel': channel,
+        'method': method,
+        'properties': properties,
+        'body': json.loads(body)
+    }
 
 
 def publish_message(queue: str, exchange: str = '') -> Any:
@@ -84,7 +103,7 @@ def publish_message(queue: str, exchange: str = '') -> Any:
 
 
 def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = None, exchange: str = '',
-                    production_ready: bool = True) -> Any:
+                    production_ready: bool = True, logging: bool = True, logging_queue: str = 'logging') -> Any:
     """
     Receive messages from RabbitMQ Server
 
@@ -94,6 +113,8 @@ def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
     :param production_ready: Keyword argument that will make this
     decorator only return one message from the queue rather than listen
     if set to False; default True
+    :param logging: Keyword arg that will determine if incoming messages are logged; default True
+    :param logging_queue: Keyword arg for the
     :return: Wrapped User Function
     :rtype: Function
 
@@ -124,25 +145,13 @@ def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
             def message_handler(channel, method, properties, body):
 
                 # Utilize module decorator to send logging messages
-                @publish_message(queue='logging', exchange='')
-                def send_log() -> Dict[str, str]:
-                    """
-                    Send message details and body as JSON to logging
-                    queue
-
-                    :return: All message elements as Python dictionary
-                    :rtype: dict
-
-                    """
-                    return {
-                        'channel': channel,
-                        'method': method,
-                        'properties': properties,
-                        'body': json.loads(body)
-                    }
+                if logging:
+                    publish_message(queue=logging_queue)(send_log)(channel, method, properties, body)
 
                 if publish_queues:
                     publish_message(queue=publish_queues, exchange=exchange)(func)(json.loads(body))
+                else:
+                    func(json.loads(body))
 
             # Open up listener with callback
             if production_ready:  # pragma: no cover
@@ -162,41 +171,8 @@ def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
 
                 if body:
                     message_handler(None, None, None, body)
-                    @publish_message(queue='logging', exchange='')
-                    def send_log() -> Dict[str, str]:
-                        """
-                        Send message details and body as JSON to logging
-                        queue
-
-                        :return: All message elements as Python dictionaary
-                        :rtype: dict
-
-                        """
-                        return {
-                            'method': method,
-                            'properties': properties,
-                            'body': json.loads(body)
-                        }
+                    if logging:
+                        publish_message(queue=logging_queue)(send_log)(None, None, None, body)
 
         return prepare_channel
     return inner_function
-
-
-def message_pipeline(consume_queue: str, publish_queue: str, exchange: str = '', production_ready: bool = True):
-    """
-    Convenience decorator when you need an to consume from a message queue and publish back to a queue
-
-    :param consume_queue: Queue from which to consume
-    :param publish_queues: Queue for publishing
-    :param exchange: Exchange if set; default ''
-    :param production_ready: If False, consumes one message and stops; default: True
-    :return:function
-    """
-    def inner_function(func):
-        def wrapper(message_dict):
-            consume_message(consume_queue=consume_queue, publish_queues=publish_queue,
-                            exchange=exchange, production_ready=production_ready)(func)(message_dict)
-        return wrapper
-    return inner_function
-
-
