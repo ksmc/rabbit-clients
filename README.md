@@ -1,6 +1,7 @@
 # Rabbit MQ Clients
 
-A set of client of objects to use in any service that needs to send or receive RabbitMQ messages.
+An attempt to simplify RabbitMQ messaging like a Flask URL Route
+
 
 ### Installation
 
@@ -15,15 +16,6 @@ From source
 ```python
 python setup.py install
 ```
-
-### Features
-
-```Rabbit-Clients``` is an opinionated set of decorators for services or solutions
-that need to exist as part of a queue oriented ecosystem.  They are opinionated in
-that you can only ever have one consumer per service.  This ties services
-to queues intentionally as to ensure the services purpose remains
-narrow and focused.  Services can publish as much as desired.  See the
-examples below for usage.
 
 *NOTE:* ```Rabbit-Clients``` looks for an environment variable called ```RABBIT_URL```.
 If this is not found then ```localhost``` will be used.
