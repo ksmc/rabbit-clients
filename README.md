@@ -17,8 +17,12 @@ From source
 python setup.py install
 ```
 
-*NOTE:* ```Rabbit-Clients``` looks for an environment variable called ```RABBIT_URL```.
-If this is not found then ```localhost``` will be used.
+*NOTE:* ```Rabbit-Clients``` looks for the following environment variables:
+
+* ```RABBIT_URL``` - RabbitMQ FQDN, defaults to ```localhost```
+* ```RABBIT_USER``` - User for authentication, defaults to ```guest```
+* ```RABBIT_PW``` - Password for authentication, defaults to ```guest```
+
 
 ### Usage Example
 
