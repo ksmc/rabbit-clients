@@ -10,7 +10,9 @@ import pika
 
 _CONNECTION = None
 _CHANNEL = None
-_HOST = os.environ.get('RABBIT_URL', 'localhost')
+_HOST = os.getenv('RABBIT_URL', 'localhost')
+_USER = os.getenv('RABBIT_USER', 'guest')
+_PW = os.getenv('RABBIT_PW', 'guest')
 
 
 def _create_global_connection() -> NoReturn:
@@ -22,7 +24,8 @@ def _create_global_connection() -> NoReturn:
     """
     global _CONNECTION, _CHANNEL
 
-    _CONNECTION = pika.BlockingConnection(pika.ConnectionParameters(_HOST))
+    credentials = pika.PlainCredentials(_USER, _PW)
+    _CONNECTION = pika.BlockingConnection(pika.ConnectionParameters(_HOST, credentials=credentials))
     _CHANNEL = _CONNECTION.channel()
 
 
