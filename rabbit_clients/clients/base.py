@@ -112,13 +112,12 @@ class ConsumeMessage:
                 if body:
                     message_handler(None, None, None, body)
                     if self._logging:
-                        publish_message(queue=self._logging_queue)(send_log)(None, None, None, body)
+                        PublishMessage(queue=self._logging_queue)(send_log)(None, None, None, body)
 
         return prepare_channel
 
 
 class PublishMessage:
-
     def __init__(self, queue: str, exchange: str = ''):
         self._queue = queue
         self._exchange = exchange
