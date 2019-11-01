@@ -61,7 +61,9 @@ class ConsumeMessage:
         self._production_ready = production_ready
         self._logging = logging
         self._logging_queue = logging_queue
-        self._manager = PikachuStateManager()
+        self._manager = PikachuStateManager(username=os.getenv('RABBIT_USER', 'guest'),
+                                            pw=os.getenv('RABBIT_PW', 'guest'),
+                                            host=os.getenv('RABBIT_URL', 'localhost'))
 
     def __call__(self, func, *args, **kwargs) -> Any:
         def prepare_channel(*args, **kwargs):
@@ -112,16 +114,19 @@ class ConsumeMessage:
                 if body:
                     message_handler(None, None, None, body)
                     if self._logging:
-                        PublishMessage(queue=self._logging_queue)(send_log)(None, None, None, body)
+                        log_publisher(queue=self._logging_queue)(send_log)(None, None, None, body)
 
         return prepare_channel
 
 
 class PublishMessage:
-    def __init__(self, queue: str, exchange: str = ''):
+    def __init__(self, queue: str, exchange: str = '', **kwargs):
         self._queue = queue
         self._exchange = exchange
-        self._manager = PikachuStateManager()
+        self._manager = PikachuStateManager(username=os.getenv('RABBIT_USER', 'guest'),
+                                            pw=os.getenv('RABBIT_PW', 'guest'),
+                                            host=os.getenv('RABBIT_URL', 'localhost'),
+                                            **kwargs)
 
     def __call__(self, func, *args, **kwargs) -> Any:
         def wrapper(*args, **kwargs):
