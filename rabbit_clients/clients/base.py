@@ -35,6 +35,8 @@ def _check_connection() -> NoReturn:  # pragma: no-cover
 
     :return: None
     """
+    global _CONNECTION
+
     if not _CONNECTION:
         _create_global_connection()
 
@@ -137,7 +139,6 @@ def consume_message(consume_queue: str, publish_queues: Union[str, List[str]] = 
             parameter of production ready being set to False
 
             """
-
             # Open RabbitMQ connection if it has closed or is not set
             _check_connection()
 
