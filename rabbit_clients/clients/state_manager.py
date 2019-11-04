@@ -26,6 +26,8 @@ class PikachuStateManager:
         _username = username if not 'ENV' else os.getenv('RABBIT_USER', 'guest')
         _pw = pw if not 'ENV' else os.getenv('RABBIT_PW', 'guest')
         kwargs['credentials'] = pika.PlainCredentials(_username, _pw)
+        kwargs['host'] = os.getenv('RABBIT_URL', 'localhost')
+        kwargs['heartbeat'] = 0
         self._connect_params = pika.ConnectionParameters(**kwargs)
         self._connection, self._channel = self.create_connection_and_channel()
 
