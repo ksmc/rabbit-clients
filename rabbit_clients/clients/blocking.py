@@ -2,16 +2,12 @@
 Base classes for Rabbit
 
 """
-from typing import Any, Dict, Union, List, Tuple
+from typing import Any, Dict, Tuple
 import os
 import json
 
 import pika
-
-try:
-    from state_manager import PikachuStateManager
-except ImportError:
-    from rabbit_clients.clients.state_manager import PikachuStateManager
+from retry import retry
 
 
 def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.BlockingConnection.channel]:
@@ -23,7 +19,7 @@ def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.Bloc
     :rtype: tuple
 
     """
-    host = os.getenv('RABBIT_URL', 'localhost')
+    host = os.getenv('RABBIT_HOST', 'localhost')
     user = os.getenv('RABBIT_USER', 'guest')
     pw = os.getenv('RABBIT_PW', 'guest')
 
@@ -44,26 +40,24 @@ def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str,
 
     """
     return {
-        'channel': channel,
-        'method': method,
-        'properties': properties,
-        'body': json.loads(body)
+        'channel': str(channel),
+        'method': str(method),
+        'properties': str(properties),
+        'body': body
     }
 
 
 class ConsumeMessage:
 
-    def __init__(self, consume_queue: str, publish_queues: Union[str, List[str]] = None, exchange: str = '',
-                 production_ready: bool = True, logging: bool = True, logging_queue: str = 'logging'):
-        self._consume_queue = consume_queue
-        self._publish_queues = publish_queues
+    def __init__(self, queue: str, exchange: str = '',
+                 logging: bool = True, logging_queue: str = 'logging'):
+        self._consume_queue = queue
         self._exchange = exchange
-        self._production_ready = production_ready
         self._logging = logging
         self._logging_queue = logging_queue
-        self._manager = PikachuStateManager()
 
     def __call__(self, func, *args, **kwargs) -> Any:
+        @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
         def prepare_channel(*args, **kwargs):
             """
             Ensure RabbitMQ Connection is open and that you have an open
@@ -78,53 +72,41 @@ class ConsumeMessage:
 
             """
             # Open RabbitMQ connection if it has closed or is not set
-            connection, channel = self._manager.ensure_connection_and_channel()
+            connection, channel = _create_connection_and_channel()
+
+            channel.queue_declare(queue=self._consume_queue)
 
             log_publisher = PublishMessage(queue=self._logging_queue)
-            queue_publish = PublishMessage(queue=self._publish_queues, exchange=self._exchange)
 
             # Callback function for when a message is received
             def message_handler(channel, method, properties, body):
 
                 # Utilize module decorator to send logging messages
+                decoded_body = json.loads(body.decode('utf-8'))
                 if self._logging:
-                    log_publisher(queue=self._logging_queue)(send_log)(channel, method, properties, body)
+                    log_publisher(send_log)(channel, method, properties, decoded_body)
 
-                if self._publish_queues:
-                    queue_publish(queue=self._publish_queues, exchange=self._exchange)(func)(json.loads(body))
-                else:
-                    func(json.loads(body))
+                func(decoded_body)
 
-            # Open up listener with callback
-            if self._production_ready:  # pragma: no cover
+            channel.basic_consume(queue=self._consume_queue, on_message_callback=message_handler, auto_ack=True)
 
-                channel.basic_consume(queue=self._consume_queue, on_message_callback=message_handler, auto_ack=True)
-
-                try:
-                    channel.start_consuming()
-                except KeyboardInterrupt:
-                    channel.stop_consuming()
-
-            # Consume one message and stop listening
-            else:
-                method, properties, body = channel.basic_get(self._consume_queue, auto_ack=True)
-
-                if body:
-                    message_handler(None, None, None, body)
-                    if self._logging:
-                        publish_message(queue=self._logging_queue)(send_log)(None, None, None, body)
+            try:
+                channel.start_consuming()
+            except pika.exceptions.ConnectionClosedByBroker:
+                pass
+            except KeyboardInterrupt:
+                channel.stop_consuming()
 
         return prepare_channel
 
 
 class PublishMessage:
-
     def __init__(self, queue: str, exchange: str = ''):
         self._queue = queue
         self._exchange = exchange
-        self._manager = PikachuStateManager()
 
     def __call__(self, func, *args, **kwargs) -> Any:
+        @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
         def wrapper(*args, **kwargs):
             """
             Run the function as expected but the return from the function must
@@ -141,7 +123,7 @@ class PublishMessage:
             result = func(*args, **kwargs)
 
             # Ensure open connection and channel
-            connection, channel = self._manager.ensure_connection_and_channel()
+            connection, channel = _create_connection_and_channel()
 
             # Ensure queue exists
             channel.queue_declare(queue=self._queue)

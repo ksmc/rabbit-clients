@@ -1,5 +1,5 @@
 """
-Unit tests for expected purposes of base.py
+Unit tests for expected purposes of blocking.py
 
 """
 
@@ -7,12 +7,8 @@ Unit tests for expected purposes of base.py
 
 from typing import Dict, NoReturn, Any
 import time
-import os
 
-from rabbit_clients import publish_message, consume_message, PublishMessage
-
-
-_DOCKER_UP = os.environ['DOCKER_STATUS']
+from rabbit_clients import ConsumeMessage, PublishMessage
 
 
 def test_that_a_message_is_sent_and_received() -> NoReturn:
@@ -29,7 +25,7 @@ def test_that_a_message_is_sent_and_received() -> NoReturn:
     # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
-    @consume_message(consume_queue='test', production_ready=False)
+    @ConsumeMessage(queue='test')
     def get_message(message_content: Dict[str, Any]):
         assert message_content['lastName'] == 'Suave'
         assert message_content['firstName'] == 'Rico'
@@ -50,7 +46,7 @@ def test_that_received_messages_are_published_to_logging_queue() -> NoReturn:
     # pytest may execute faster than the message is able to be read, pause for 5 seconds
     time.sleep(5)
 
-    @consume_message(consume_queue='logging', production_ready=False)
+    @ConsumeMessage(queue='logging')
     def check_log(message_content: Dict[str, Any]):
         assert 'method' in message_content.keys()
         assert 'body' in message_content.keys()
