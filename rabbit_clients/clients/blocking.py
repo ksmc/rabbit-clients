@@ -22,9 +22,10 @@ def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.Bloc
     host = os.getenv('RABBIT_HOST', 'localhost')
     user = os.getenv('RABBIT_USER', 'guest')
     pw = os.getenv('RABBIT_PW', 'guest')
+    vhost = os.getenv('RABBIT_VHOST', '/')
 
     credentials = pika.PlainCredentials(user, pw)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host, virtual_host=vhost, credentials=credentials))
     return connection, connection.channel()
 
 
