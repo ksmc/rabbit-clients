@@ -88,10 +88,10 @@ class ConsumeMessage:
 
                 # Utilize module decorator to send logging messages
                 if self._logging:
-                    log_publisher(queue=self._logging_queue)(send_log)(channel, method, properties, body)
+                    log_publisher(send_log)(channel, method, properties, body)
 
                 if self._publish_queues:
-                    queue_publish(queue=self._publish_queues, exchange=self._exchange)(func)(json.loads(body))
+                    queue_publish(func)(json.loads(body))
                 else:
                     func(json.loads(body))
 
@@ -112,13 +112,12 @@ class ConsumeMessage:
                 if body:
                     message_handler(None, None, None, body)
                     if self._logging:
-                        publish_message(queue=self._logging_queue)(send_log)(None, None, None, body)
+                        PublishMessage(queue=self._logging_queue)(send_log)(None, None, None, body)
 
         return prepare_channel
 
 
 class PublishMessage:
-
     def __init__(self, queue: str, exchange: str = ''):
         self._queue = queue
         self._exchange = exchange
