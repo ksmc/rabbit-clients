@@ -1,4 +1,3 @@
 pika
-pytest
-pytest-cov
-pylint
+retry
+
