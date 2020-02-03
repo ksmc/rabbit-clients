@@ -19,7 +19,7 @@ python setup.py install
 
 *NOTE:* ```Rabbit-Clients``` looks for the following environment variables:
 
-* ```RABBIT_URL``` - RabbitMQ FQDN, defaults to ```localhost```
+* ```RABBIT_HOST``` - RabbitMQ FQDN, defaults to ```localhost```
 * ```RABBIT_USER``` - User for authentication, defaults to ```guest```
 * ```RABBIT_PW``` - Password for authentication, defaults to ```guest```
 
@@ -29,10 +29,7 @@ python setup.py install
 You may only have one consumer per module/service.  A user can publish as much as desired.
 
 ```python
-from typing import TypeVar
 from rabbit_clients import PublishMessage, ConsumeMessage
-
-RabbitMQMessage = TypeVar('RabbitMQMessage')
 
 
 @PublishMessage(queue='younguns')
@@ -48,8 +45,8 @@ def check_for_aaron(consumed_message):
     return return_message
 
 
-@ConsumeMessage(consume_queue='oldfolks')
-def remove_forty_and_up(message_dict):
+@ConsumeMessage(queue='oldfolks')
+def remove_forty_and_up(message_dict = None):
     people = message_dict['people']
     not_protected_class = [younger for younger in people if younger['age'] < 40]
     message_dict['people'] = not_protected_class

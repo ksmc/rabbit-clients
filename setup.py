@@ -2,7 +2,11 @@ from setuptools import setup
 
 setup(
     name='rabbit-clients',
+<<<<<<< HEAD
+    version='2.0.0',
+=======
     version='1.0.4',
+>>>>>>> master
     packages=['tests', 'rabbit_clients', 'rabbit_clients.clients'],
     url='https://github.com/awburgess/rabbit-clients',
     license='MIT License',
@@ -12,7 +16,8 @@ setup(
     long_description='Provides decorators for basic RabbitMQ support with respect to publishing and consuming messages.',
     keywords='rabbitmq',
     install_requires=[
-        'pika'
+        'pika',
+        'retry'
     ],
     extra_require=[
         'pytest',

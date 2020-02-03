@@ -7,7 +7,8 @@ echo "Preparing environment.  This may take a minute..."
 python3 -m venv rabbittest > tests.log
 source rabbittest/bin/activate >> tests.log
 pip install -r requirements.txt >> tests.log
-export RABBIT_URL=localhost
+pip install -r requirements-dev.txt >> tests.log
+export RABBIT_HOST=localhost
 
 if [ -z "$NO_DOCKER" ]
 then
