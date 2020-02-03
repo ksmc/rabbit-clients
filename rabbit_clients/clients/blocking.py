@@ -48,11 +48,11 @@ def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str,
 
 
 class ConsumeMessage:
-
-    def __init__(self, queue: str, exchange: str = '',
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = '',
                  logging: bool = True, logging_queue: str = 'logging'):
         self._consume_queue = queue
         self._exchange = exchange
+        self._exchange_type = exchange_type
         self._logging = logging
         self._logging_queue = logging_queue
 
@@ -74,7 +74,12 @@ class ConsumeMessage:
             # Open RabbitMQ connection if it has closed or is not set
             connection, channel = _create_connection_and_channel()
 
-            channel.queue_declare(queue=self._consume_queue)
+            if self._exchange:
+                channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
+                result = channel.queue_declare(queue=self._consume_queue)
+                channel.queue_bind(exchange=self._exchange, queue=result.method.queue)
+            else:
+                channel.queue_declare(queue=self._consume_queue)
 
             log_publisher = PublishMessage(queue=self._logging_queue)
 
@@ -101,9 +106,10 @@ class ConsumeMessage:
 
 
 class PublishMessage:
-    def __init__(self, queue: str, exchange: str = ''):
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'fanout'):
         self._queue = queue
         self._exchange = exchange
+        self._exchange_type = exchange_type
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
@@ -125,8 +131,13 @@ class PublishMessage:
             # Ensure open connection and channel
             connection, channel = _create_connection_and_channel()
 
-            # Ensure queue exists
-            channel.queue_declare(queue=self._queue)
+            if self._exchange:
+                channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
+                result = channel.queue_declare(queue=self._queue)
+                channel.queue_bind(exchange=self._exchange, queue=result.method.queue)
+            else:
+                # Ensure queue exists
+                channel.queue_declare(queue=self._queue)
 
             # Send message to queue
             channel.basic_publish(
@@ -134,4 +145,5 @@ class PublishMessage:
                 routing_key=self._queue,
                 body=json.dumps(result)
             )
+
         return wrapper
