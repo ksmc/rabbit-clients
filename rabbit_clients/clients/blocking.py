@@ -2,29 +2,32 @@
 Base classes for Rabbit
 
 """
-from typing import Any, Dict, Tuple
+# pylint: disable=too-few-public-methods, too-many-arguments
+from typing import Any, Dict
 import json
 
 import pika
 from retry import retry
 
-from rabbit_clients.clients.config import rabbit_config
+from rabbit_clients.clients.config import RABBIT_CONFIG
 
 
-def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.BlockingConnection.channel]:
+def _create_connection_and_channel() -> pika.BlockingConnection.channel:
     """
     Will run immediately on library import.  Requires that an environment variable
     for RABBIT_URL has been set.
 
-    :return: Tuple as rabbitmq connection and channel
+    :return: RabbitMQ Channel
     :rtype: tuple
 
     """
-    credentials = pika.PlainCredentials(rabbit_config.RABBITMQ_USER, rabbit_config.RABBITMQ_PASSWORD)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbit_config.RABBITMQ_HOST,
-                                                                   virtual_host=rabbit_config.RABBITMQ_VIRTUAL_HOST,
-                                                                   credentials=credentials))
-    return connection, connection.channel()
+    credentials = pika.PlainCredentials(RABBIT_CONFIG.RABBITMQ_USER,
+                                        RABBIT_CONFIG.RABBITMQ_PASSWORD)
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(RABBIT_CONFIG.RABBITMQ_HOST,
+                                  virtual_host=RABBIT_CONFIG.RABBITMQ_VIRTUAL_HOST,
+                                  credentials=credentials))
+    return connection.channel()
 
 
 def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str, Any]:
@@ -47,6 +50,11 @@ def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str,
 
 
 class ConsumeMessage:
+    """
+    Decorator class that allows users to quickly attach functioning code to a
+    RabbitMQ Broker without needing to manage channels, connections, etc.
+
+    """
     def __init__(self, queue: str, exchange: str = '', exchange_type: str = '',
                  logging: bool = True, logging_queue: str = 'logging'):
         self._consume_queue = queue
@@ -57,7 +65,7 @@ class ConsumeMessage:
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
-        def prepare_channel(*args, **kwargs):
+        def prepare_channel():
             """
             Ensure RabbitMQ Connection is open and that you have an open
             channel.  Then provide a callback returns the target function
@@ -71,7 +79,7 @@ class ConsumeMessage:
 
             """
             # Open RabbitMQ connection if it has closed or is not set
-            connection, channel = _create_connection_and_channel()
+            channel = _create_connection_and_channel()
 
             if self._exchange:
                 channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
@@ -92,7 +100,8 @@ class ConsumeMessage:
 
                 func(decoded_body)
 
-            channel.basic_consume(queue=self._consume_queue, on_message_callback=message_handler, auto_ack=True)
+            channel.basic_consume(queue=self._consume_queue,
+                                  on_message_callback=message_handler, auto_ack=True)
 
             try:
                 channel.start_consuming()
@@ -105,6 +114,11 @@ class ConsumeMessage:
 
 
 class PublishMessage:
+    """
+    Decorator class that assumes the decorated function will return a Python
+    dict to be transmitted as JSON to the RabbitMQ Broker
+
+    """
     def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'fanout'):
         self._queue = queue
         self._exchange = exchange
@@ -128,7 +142,7 @@ class PublishMessage:
             result = func(*args, **kwargs)
 
             # Ensure open connection and channel
-            connection, channel = _create_connection_and_channel()
+            channel = _create_connection_and_channel()
 
             if self._exchange:
                 channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
