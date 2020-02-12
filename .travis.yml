@@ -13,5 +13,5 @@ install:
   - pip install -r requirements-dev.txt
 
 script:
-  - pytest cov=rabbit_clients tests
+  - pytest --cov=rabbit_clients tests
   - pylint rabbit_clients
