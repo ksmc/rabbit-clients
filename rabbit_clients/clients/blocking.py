@@ -3,11 +3,12 @@ Base classes for Rabbit
 
 """
 from typing import Any, Dict, Tuple
-import os
 import json
 
 import pika
 from retry import retry
+
+from rabbit_clients.clients.config import rabbit_config
 
 
 def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.BlockingConnection.channel]:
@@ -19,13 +20,10 @@ def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.Bloc
     :rtype: tuple
 
     """
-    host = os.getenv('RABBIT_HOST', 'localhost')
-    user = os.getenv('RABBIT_USER', 'guest')
-    pw = os.getenv('RABBIT_PW', 'guest')
-    vhost = os.getenv('RABBIT_VHOST', '/')
-
-    credentials = pika.PlainCredentials(user, pw)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host, virtual_host=vhost, credentials=credentials))
+    credentials = pika.PlainCredentials(rabbit_config.RABBITMQ_USER, rabbit_config.RABBITMQ_PASSWORD)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbit_config.RABBITMQ_HOST,
+                                                                   virtual_host=rabbit_config.RABBITMQ_VIRTUAL_HOST,
+                                                                   credentials=credentials))
     return connection, connection.channel()
 
 
