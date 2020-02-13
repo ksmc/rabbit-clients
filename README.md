@@ -1,3 +1,5 @@
+!['build status'](https://travis-ci.org/awburgess/rabbit-clients.svg?branch=master)
+
 # Rabbit MQ Clients
 
 Simplify RabbitMQ messaging like a Flask URL Route and enforce
