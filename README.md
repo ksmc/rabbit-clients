@@ -1,4 +1,6 @@
 !['build status'](https://travis-ci.org/awburgess/rabbit-clients.svg?branch=master)
+![Coverage Status](https://coveralls.io/repos/github/awburgess/rabbit-clients/badge.svg?branch=feature/expand_rabbitmq_config_env)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/awburgess/rabbit-clients)
 
 # Rabbit MQ Clients
 
