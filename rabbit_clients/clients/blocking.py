@@ -55,13 +55,14 @@ class ConsumeMessage:
     RabbitMQ Broker without needing to manage channels, connections, etc.
 
     """
-    def __init__(self, queue: str, exchange: str = '', exchange_type: str = '',
-                 logging: bool = True, logging_queue: str = 'logging'):
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'direct',
+                 logging: bool = True, logging_queue: str = 'logging', ad_hoc: bool = False):
         self._consume_queue = queue
         self._exchange = exchange
         self._exchange_type = exchange_type
         self._logging = logging
         self._logging_queue = logging_queue
+        self._ad_hoc = ad_hoc
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
@@ -79,14 +80,14 @@ class ConsumeMessage:
 
             """
             # Open RabbitMQ connection if it has closed or is not set
-            channel = _create_connection_and_channel()
+            _channel = _create_connection_and_channel()
 
             if self._exchange:
-                channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
-                result = channel.queue_declare(queue=self._consume_queue)
-                channel.queue_bind(exchange=self._exchange, queue=result.method.queue)
+                _channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
+                declared_queue = _channel.queue_declare(queue=self._consume_queue)
+                _channel.queue_bind(exchange=self._exchange, queue=declared_queue.method.queue)
             else:
-                channel.queue_declare(queue=self._consume_queue)
+                _channel.queue_declare(queue=self._consume_queue)
 
             log_publisher = PublishMessage(queue=self._logging_queue)
 
@@ -100,15 +101,17 @@ class ConsumeMessage:
 
                 func(decoded_body)
 
-            channel.basic_consume(queue=self._consume_queue,
+            if self._ad_hoc:
+                _channel.basic_get(queue=self._consume_queue)
+            _channel.basic_consume(queue=self._consume_queue,
                                   on_message_callback=message_handler, auto_ack=True)
 
             try:
-                channel.start_consuming()
+                _channel.start_consuming()
             except pika.exceptions.ConnectionClosedByBroker:
                 pass
             except KeyboardInterrupt:
-                channel.stop_consuming()
+                _channel.stop_consuming()
 
         return prepare_channel
 
@@ -119,7 +122,7 @@ class PublishMessage:
     dict to be transmitted as JSON to the RabbitMQ Broker
 
     """
-    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'fanout'):
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'direct'):
         self._queue = queue
         self._exchange = exchange
         self._exchange_type = exchange_type
@@ -139,15 +142,15 @@ class PublishMessage:
 
             """
             # Run the function and get dictionary as result
-            result = func(*args, **kwargs)
+            result = json.dumps(func(*args, **kwargs))
 
             # Ensure open connection and channel
             channel = _create_connection_and_channel()
 
             if self._exchange:
                 channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
-                result = channel.queue_declare(queue=self._queue)
-                channel.queue_bind(exchange=self._exchange, queue=result.method.queue)
+                declared_queue = channel.queue_declare(queue=self._queue)
+                channel.queue_bind(exchange=self._exchange, queue=declared_queue.method.queue)
             else:
                 # Ensure queue exists
                 channel.queue_declare(queue=self._queue)
@@ -156,7 +159,7 @@ class PublishMessage:
             channel.basic_publish(
                 exchange=self._exchange,
                 routing_key=self._queue,
-                body=json.dumps(result)
+                body=result
             )
 
         return wrapper
