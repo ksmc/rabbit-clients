@@ -2,6 +2,7 @@
 ![Coverage Status](https://coveralls.io/repos/github/awburgess/rabbit-clients/badge.svg?branch=feature/expand_rabbitmq_config_env)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/awburgess/rabbit-clients)
 
+
 # Rabbit MQ Clients
 
 Simplify RabbitMQ messaging like a Flask URL Route and enforce
