@@ -2,30 +2,32 @@
 Base classes for Rabbit
 
 """
-from typing import Any, Dict, Tuple
-import os
+# pylint: disable=too-few-public-methods, too-many-arguments
+from typing import Any, Dict
 import json
 
 import pika
 from retry import retry
 
+from rabbit_clients.clients.config import RABBIT_CONFIG
 
-def _create_connection_and_channel() -> Tuple[pika.BlockingConnection, pika.BlockingConnection.channel]:
+
+def _create_connection_and_channel() -> pika.BlockingConnection.channel:
     """
     Will run immediately on library import.  Requires that an environment variable
     for RABBIT_URL has been set.
 
-    :return: Tuple as rabbitmq connection and channel
+    :return: RabbitMQ Channel
     :rtype: tuple
 
     """
-    host = os.getenv('RABBIT_HOST', 'localhost')
-    user = os.getenv('RABBIT_USER', 'guest')
-    pw = os.getenv('RABBIT_PW', 'guest')
-
-    credentials = pika.PlainCredentials(user, pw)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials))
-    return connection, connection.channel()
+    credentials = pika.PlainCredentials(RABBIT_CONFIG.RABBITMQ_USER,
+                                        RABBIT_CONFIG.RABBITMQ_PASSWORD)
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(RABBIT_CONFIG.RABBITMQ_HOST,
+                                  virtual_host=RABBIT_CONFIG.RABBITMQ_VIRTUAL_HOST,
+                                  credentials=credentials))
+    return connection.channel()
 
 
 def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str, Any]:
@@ -48,17 +50,22 @@ def send_log(channel: Any, method: str, properties: Any, body: str) -> Dict[str,
 
 
 class ConsumeMessage:
+    """
+    Decorator class that allows users to quickly attach functioning code to a
+    RabbitMQ Broker without needing to manage channels, connections, etc.
 
-    def __init__(self, queue: str, exchange: str = '',
+    """
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'direct',
                  logging: bool = True, logging_queue: str = 'logging'):
         self._consume_queue = queue
         self._exchange = exchange
+        self._exchange_type = exchange_type
         self._logging = logging
         self._logging_queue = logging_queue
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
-        def prepare_channel(*args, **kwargs):
+        def prepare_channel():
             """
             Ensure RabbitMQ Connection is open and that you have an open
             channel.  Then provide a callback returns the target function
@@ -72,9 +79,15 @@ class ConsumeMessage:
 
             """
             # Open RabbitMQ connection if it has closed or is not set
-            connection, channel = _create_connection_and_channel()
+            _channel = _create_connection_and_channel()
 
-            channel.queue_declare(queue=self._consume_queue)
+            if self._exchange:
+                _channel.exchange_declare(exchange=self._exchange,
+                                          exchange_type=self._exchange_type)
+                declared_queue = _channel.queue_declare(queue=self._consume_queue)
+                _channel.queue_bind(exchange=self._exchange, queue=declared_queue.method.queue)
+            else:
+                _channel.queue_declare(queue=self._consume_queue)
 
             log_publisher = PublishMessage(queue=self._logging_queue)
 
@@ -88,22 +101,29 @@ class ConsumeMessage:
 
                 func(decoded_body)
 
-            channel.basic_consume(queue=self._consume_queue, on_message_callback=message_handler, auto_ack=True)
+            _channel.basic_consume(queue=self._consume_queue,
+                                   on_message_callback=message_handler, auto_ack=True)
 
             try:
-                channel.start_consuming()
+                _channel.start_consuming()
             except pika.exceptions.ConnectionClosedByBroker:
                 pass
             except KeyboardInterrupt:
-                channel.stop_consuming()
+                _channel.stop_consuming()
 
         return prepare_channel
 
 
 class PublishMessage:
-    def __init__(self, queue: str, exchange: str = ''):
+    """
+    Decorator class that assumes the decorated function will return a Python
+    dict to be transmitted as JSON to the RabbitMQ Broker
+
+    """
+    def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'direct'):
         self._queue = queue
         self._exchange = exchange
+        self._exchange_type = exchange_type
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
@@ -120,18 +140,24 @@ class PublishMessage:
 
             """
             # Run the function and get dictionary as result
-            result = func(*args, **kwargs)
+            result = json.dumps(func(*args, **kwargs))
 
             # Ensure open connection and channel
-            connection, channel = _create_connection_and_channel()
+            channel = _create_connection_and_channel()
 
-            # Ensure queue exists
-            channel.queue_declare(queue=self._queue)
+            if self._exchange:
+                channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
+                declared_queue = channel.queue_declare(queue=self._queue)
+                channel.queue_bind(exchange=self._exchange, queue=declared_queue.method.queue)
+            else:
+                # Ensure queue exists
+                channel.queue_declare(queue=self._queue)
 
             # Send message to queue
             channel.basic_publish(
                 exchange=self._exchange,
                 routing_key=self._queue,
-                body=json.dumps(result)
+                body=result
             )
+
         return wrapper
