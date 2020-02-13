@@ -56,13 +56,12 @@ class ConsumeMessage:
 
     """
     def __init__(self, queue: str, exchange: str = '', exchange_type: str = 'direct',
-                 logging: bool = True, logging_queue: str = 'logging', ad_hoc: bool = False):
+                 logging: bool = True, logging_queue: str = 'logging'):
         self._consume_queue = queue
         self._exchange = exchange
         self._exchange_type = exchange_type
         self._logging = logging
         self._logging_queue = logging_queue
-        self._ad_hoc = ad_hoc
 
     def __call__(self, func, *args, **kwargs) -> Any:
         @retry(pika.exceptions.AMQPConnectionError, tries=5, delay=5, jitter=(1, 3))
@@ -83,7 +82,8 @@ class ConsumeMessage:
             _channel = _create_connection_and_channel()
 
             if self._exchange:
-                _channel.exchange_declare(exchange=self._exchange, exchange_type=self._exchange_type)
+                _channel.exchange_declare(exchange=self._exchange,
+                                          exchange_type=self._exchange_type)
                 declared_queue = _channel.queue_declare(queue=self._consume_queue)
                 _channel.queue_bind(exchange=self._exchange, queue=declared_queue.method.queue)
             else:
@@ -101,10 +101,8 @@ class ConsumeMessage:
 
                 func(decoded_body)
 
-            if self._ad_hoc:
-                _channel.basic_get(queue=self._consume_queue)
             _channel.basic_consume(queue=self._consume_queue,
-                                  on_message_callback=message_handler, auto_ack=True)
+                                   on_message_callback=message_handler, auto_ack=True)
 
             try:
                 _channel.start_consuming()
