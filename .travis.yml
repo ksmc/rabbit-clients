@@ -1,0 +1,21 @@
+language: python
+
+python:
+  - "3.7"
+
+addons:
+  apt:
+    packages:
+    - rabbitmq-server
+
+install:
+  - pip install -r requirements.txt
+  - pip install -r requirements-dev.txt
+  - pip install coveralls
+
+script:
+  - pytest --cov=rabbit_clients tests
+  - pylint rabbit_clients
+
+after_success:
+  - coveralls
